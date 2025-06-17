@@ -3,9 +3,227 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Game</title>
+  <title>플레이어는 나 하나 - 탑뷰 v1.7</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #111; }
+    canvas { background: #222; display: block; }
+    #joystick, #attackBtn, #skillBtn {
+      position: absolute;
+      z-index: 10;
+    }
+    #joystick {
+      bottom: 30px;
+      left: 30px;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      touch-action: none;
+    }
+    #stick {
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 50%;
+      position: absolute;
+      left: 45px;
+      top: 45px;
+    }
+    #attackBtn {
+      bottom: 60px;
+      right: 60px;
+      width: 110px;
+      height: 110px;
+      background: red;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 110px;
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+      user-select: none;
+    }
+    #skillBtn {
+      top: 30px;
+      right: 60px;
+      width: 100px;
+      height: 50px;
+      background: purple;
+      border-radius: 10px;
+      text-align: center;
+      line-height: 50px;
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+      user-select: none;
+    }
+  </style>
 </head>
 <body>
-  <h1 style="color:white; background:black; text-align:center;">여기에 게임이 들어갑니다 (game.html)</h1>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="joystick"><div id="stick"></div></div>
+<div id="attackBtn">공격</div>
+<div id="skillBtn">그림자</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const player = {
+  x: 400, y: 300, width: 30, height: 40,
+  vx: 0, vy: 0,
+  color: "lime", headColor: "#f0c090",
+  isAttacking: false,
+  isHit: false, hitFrame: 0,
+  hp: 100, mp: 100
+};
+
+const monster = {
+  x: 600, y: 300, size: 30, color: "red",
+  isHit: false, hitFrame: 0,
+  isAttacking: false
+};
+
+let shadowActive = false;
+
+const joystick = document.getElementById("joystick");
+const stick = document.getElementById("stick");
+let joystickActive = false;
+let origin = { x: 0, y: 0 };
+
+joystick.addEventListener("touchstart", e => {
+  joystickActive = true;
+  origin.x = e.touches[0].clientX;
+  origin.y = e.touches[0].clientY;
+}, false);
+
+joystick.addEventListener("touchmove", e => {
+  if (!joystickActive) return;
+  const touch = e.touches[0];
+  const dx = touch.clientX - origin.x;
+  const dy = touch.clientY - origin.y;
+  const dist = Math.min(Math.hypot(dx, dy), 60);
+  const angle = Math.atan2(dy, dx);
+  stick.style.left = 45 + Math.cos(angle) * dist + "px";
+  stick.style.top = 45 + Math.sin(angle) * dist + "px";
+  player.vx = Math.cos(angle) * 2;
+  player.vy = Math.sin(angle) * 2;
+  e.preventDefault();
+}, false);
+
+joystick.addEventListener("touchend", e => {
+  joystickActive = false;
+  stick.style.left = "45px";
+  stick.style.top = "45px";
+  player.vx = 0;
+  player.vy = 0;
+}, false);
+
+document.getElementById("attackBtn").addEventListener("touchstart", () => {
+  if (!player.isAttacking) {
+    player.isAttacking = true;
+    setTimeout(() => player.isAttacking = false, 300);
+
+    const dx = player.x - monster.x;
+    const dy = player.y - monster.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 60) {
+      monster.isHit = true;
+      monster.hitFrame = 0;
+    }
+
+    monster.isAttacking = true;
+    setTimeout(() => monster.isAttacking = false, 300);
+  }
+}, false);
+
+document.getElementById("skillBtn").addEventListener("touchstart", () => {
+  shadowActive = true;
+  setTimeout(() => shadowActive = false, 3000);
+}, false);
+
+function update() {
+  player.x += player.vx;
+  player.y += player.vy;
+  player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+  player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+  if (player.isHit) {
+    player.hitFrame++;
+    if (player.hitFrame > 10) {
+      player.isHit = false;
+    }
+  }
+
+  if (monster.isHit) {
+    monster.hitFrame++;
+    if (monster.hitFrame > 10) {
+      monster.isHit = false;
+    }
+  }
+
+  if (monster.isAttacking && !player.isHit) {
+    const dx = monster.x - player.x;
+    const dy = monster.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 50) {
+      player.isHit = true;
+      player.hitFrame = 0;
+      player.hp = Math.max(0, player.hp - 5);
+      player.x -= dx / dist * 10;
+      player.y -= dy / dist * 10;
+    }
+  }
+}
+
+function drawPlayer() {
+  ctx.fillStyle = player.isHit ? "red" : player.color;
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+  ctx.beginPath();
+  ctx.arc(player.x + player.width/2, player.y - 10, 10, 0, Math.PI * 2);
+  ctx.fillStyle = player.headColor;
+  ctx.fill();
+
+  if (player.isAttacking) {
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(player.x + player.width, player.y + 10, 10, 10);
+  }
+
+  if (shadowActive && player.isAttacking) {
+    ctx.fillStyle = "purple";
+    ctx.fillRect(player.x - player.width, player.y + 10, 10, 10);
+  }
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "14px Arial";
+  ctx.fillText("HP: " + player.hp + "/100", player.x - 10, player.y - 25);
+  ctx.fillText("MP: " + player.mp + "/100", player.x - 10, player.y - 10);
+}
+
+function drawMonster() {
+  ctx.fillStyle = monster.isHit ? "white" : monster.color;
+  ctx.fillRect(monster.x, monster.y, monster.size, monster.size);
+  if (monster.isAttacking) {
+    ctx.fillStyle = "orange";
+    ctx.fillRect(monster.x - 10, monster.y + 10, 10, 5);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPlayer();
+  drawMonster();
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+gameLoop();
+</script>
+
 </body>
 </html>
